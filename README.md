@@ -39,7 +39,7 @@ INTRANOT_HOST=127.0.0.1 ./start.sh
 
 Dacă serverul are firewall activ, permite portul ales pentru dispozitivele din LAN. Scriptul nu modifică firewall-ul și nu configurează routerul. Cu `./start.sh`, aplicația rulează în terminal până la `Ctrl+C`.
 
-Aplicația nu are autentificare și este destinată unei rețele de încredere. Dispozitivele din LAN pot deschide aplicația; fișierele salvate în browser rămân proprii acelui browser. PDF-urile opționale așezate direct în `orar/dist/` sunt accesibile dispozitivelor care pot accesa serverul.
+Aplicația nu are autentificare și este destinată unei rețele de încredere. Dispozitivele din LAN pot consulta și înlocui orarul comun. PDF-urile opționale așezate direct în `orar/dist/` sunt accesibile dispozitivelor care pot accesa serverul.
 
 ## Pornire automată la boot pe Debian
 
@@ -81,7 +81,7 @@ Environment=INTRANOT_PORT=5000
 
 Apoi rulează `sudo systemctl daemon-reload` și `sudo systemctl restart intranot`.
 
-În meniul cu trei puncte, alege **Încarcă fișier PDF**, apoi selectează orarul. Aplicația păstrează documentul în IndexedDB, iar preferințele în localStorage, în browserul folosit. PDF-urile sunt procesate local, fără servicii externe.
+În meniul cu trei puncte, alege **Încarcă fișier PDF**, apoi selectează orarul. PDF-ul este interpretat în browser și salvat pe serverul tău, în `.local/data/`. Toate dispozitivele din LAN încarcă același orar de pe server; grupa și semigrupa sunt preferințe locale ale fiecărui browser. Nu sunt folosite servicii externe de procesare sau stocare.
 
 ## Funcționalități
 
@@ -95,7 +95,13 @@ Apoi rulează `sudo systemctl daemon-reload` și `sudo systemctl restart intrano
 
 ## PDF-uri și date locale
 
-**Repository-ul nu conține PDF-uri.** Acestea sunt excluse prin `.gitignore`. Fișierele încărcate prin aplicație nu sunt trimise către GitHub sau către servere externe.
+**Repository-ul nu conține PDF-uri.** Acestea sunt excluse prin `.gitignore`. Fișierele încărcate prin aplicație sunt salvate doar pe serverul tău și nu sunt trimise către GitHub sau către servicii externe.
+
+Directorul `.local/data/` conține PDF-urile și metadatele orarului comun. Salvarea noii versiuni este atomică, iar versiunile anterioare sunt păstrate. Datele supraviețuiesc repornirii serviciului și actualizărilor prin `git pull`; nu șterge acest director. Pentru altă locație de stocare poți configura `INTRANOT_DATA_DIR`, cu drepturi de citire și scriere pentru contul serviciului.
+
+La actualizarea de la versiunea care salva doar în browser, deschide aplicația pe PC-ul și la aceeași adresă unde ai încărcat PDF-ul inițial. Dacă serverul nu are încă un orar, copia veche din browser este migrată automat. Dacă browserul nu mai are fișierul, încarcă-l o singură dată din nou. Pe telefon, reîncarcă pagina folosind adresa aceluiași server. Un orar deja salvat pe server are prioritate față de copiile vechi din browser.
+
+Pagina verifică schimbările la revenirea în aplicație și la fiecare 30 de secunde cât timp este vizibilă.
 
 Dicționarul de denumiri extras din legendă este inclus în `orar/dist/discipline-legend.mjs`; PDF-ul sursă nu este inclus. Opțional, poți păstra local un orar implicit în `orar/dist/orar-master.pdf` și legenda originală în `orar/dist/legenda-discipline.pdf`. Ambele rămân ignorate de Git.
 

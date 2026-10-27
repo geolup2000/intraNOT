@@ -11,6 +11,7 @@ try { preferences = JSON.parse(localStorage.getItem('intranot-preferences')) || 
 const state = { group: ['1','2','3','4'].includes(preferences.group) ? preferences.group : '4', subgroup: ['A','B','Toate'].includes(preferences.subgroup) ? preferences.subgroup : 'A', lastday: [5,6,7].includes(preferences.lastday) ? preferences.lastday : 5 };
 let selected = today(), activeSetting, pdfUrl = null, pdfName = '', timer, importing = false;
 let schedule = null, loadingSchedule = true, scheduleError = '';
+let sharedVersion = null, synchronizing = false;
 function today() { const parts = new Intl.DateTimeFormat('en-CA', {timeZone:'Europe/Bucharest',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()); const val = t => Number(parts.find(p=>p.type===t).value); return new Date(val('year'),val('month')-1,val('day'),12); }
 function monday(date) { const d = new Date(date); d.setDate(d.getDate() - (d.getDay()+6)%7); return d; }
 function sameDay(a,b) { return a.toDateString() === b.toDateString(); }
@@ -92,25 +93,59 @@ function updateImportReport() {
   $('#warnings-title').textContent = schedule?.warnings.length ? `De verificat: ${schedule.warnings.length} ${schedule.warnings.length === 1 ? 'observație' : 'observații'}` : '';
   $('#warnings-list').replaceChildren(...(schedule?.warnings || []).map(warning => element('li', '', warning)));
 }
-function openUpload() { $('#file-name').textContent=pdfName?`Fișier curent: ${pdfName}`:'Niciun PDF încărcat.';$('#upload-status').textContent='';updateImportReport();$('#upload-dialog').showModal(); }
+function openUpload() { $('#file-name').textContent=pdfName?`Fișier pe server: ${pdfName}`:'Niciun PDF încărcat pe server.';$('#upload-status').textContent='';updateImportReport();$('#upload-dialog').showModal(); }
 function openDocument(url, name) { $('#preview-name').textContent=name;$('#pdf-dialog h2').textContent=url==='legenda-discipline.pdf'?'Legenda disciplinelor':'PDF-ul orarului';$('#pdf-preview').data=url;$('#download-pdf').href=url;$('#download-pdf').download=name;$('#pdf-dialog').showModal(); }
 function openPdf() { if(pdfUrl)openDocument(pdfUrl,pdfName);else openUpload(); }
 $('#open-pdf').onclick=openPdf; $('#footer-upload').onclick=openUpload;$('#import-notice').onclick=()=>{openUpload();$('#import-warnings').open=true;};$('#view-uploaded').onclick=()=>{$('#upload-dialog').close();openPdf();};
 function database() { return new Promise((resolve,reject)=>{const request=indexedDB.open('intranot',1);request.onupgradeneeded=()=>request.result.createObjectStore('documents');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);}); }
-async function storePdf(file) {const db=await database();try{await new Promise((resolve,reject)=>{const tx=db.transaction('documents','readwrite');tx.objectStore('documents').put(file,'schedule');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}finally{db.close();}}
-async function restorePdf() { try{const db=await database();const file=await new Promise((resolve,reject)=>{const req=db.transaction('documents').objectStore('documents').get('schedule');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});db.close();if(file){pdfUrl=URL.createObjectURL(file);pdfName=file.name;return file;}}catch{/* The bundled PDF remains available when storage is disabled. */}return null; }
+async function restoreLegacyPdf() { try{const db=await database();const file=await new Promise((resolve,reject)=>{const req=db.transaction('documents').objectStore('documents').get('schedule');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});db.close();return file||null;}catch{return null;} }
+async function sharedDocument() {
+  const response = await fetch('/api/schedule', {cache:'no-store'});
+  if (!response.ok) throw new Error('Actualizează și repornește serverul pentru salvarea comună a orarului.');
+  return (await response.json()).document;
+}
+async function saveSharedPdf(file, onlyIfEmpty=false) {
+  const headers={'Content-Type':'application/pdf','X-PDF-Name':encodeURIComponent(file.name)};
+  if(onlyIfEmpty)headers['If-None-Match']='*';
+  const response = await fetch('/api/schedule', {method:'PUT',headers,body:file});
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.document) throw Object.assign(new Error(result.error || 'PDF-ul nu a putut fi salvat pe server.'),{status:response.status});
+  return result.document;
+}
+async function readSharedPdf(document) {
+  const response = await fetch(document.pdfUrl, {cache:'no-store'});
+  if (!response.ok) throw new Error('PDF-ul salvat pe server nu poate fi citit.');
+  return readSchedule(await response.arrayBuffer());
+}
+function useSharedSchedule(document, imported) {
+  pdfUrl=document.pdfUrl;pdfName=document.name;sharedVersion=document.version;schedule=imported;scheduleError='';
+}
 async function initializeSchedule() {
   try {
-    const configResponse = await fetch('/api/local-documents');
+    const [configResponse, document] = await Promise.all([fetch('/api/local-documents'), sharedDocument()]);
     if (!configResponse.ok) throw new Error('Pornește aplicația cu npm start sau start-local.cmd.');
     const documents = await configResponse.json();
     $('[data-action="legend"]').hidden = !documents.legend;
-    const file = await restorePdf();
-    let buffer;
-    if (file) buffer = await file.arrayBuffer();
-    else if (documents.schedule) { const response = await fetch(DEFAULT_PDF); if (!response.ok) throw new Error('PDF-ul implicit nu este disponibil. Încarcă un fișier din meniu.'); buffer = await response.arrayBuffer();pdfUrl=DEFAULT_PDF;pdfName=DEFAULT_NAME; }
-    else return;
-    schedule = await readSchedule(buffer);
+    if (document) { useSharedSchedule(document, await readSharedPdf(document));return; }
+    // Migrate the old browser-only document once, without overwriting a shared
+    // schedule with a potentially stale browser cache on subsequent visits.
+    let file = await restoreLegacyPdf();
+    if (!file && documents.schedule) {
+      const response=await fetch(DEFAULT_PDF);
+      if (!response.ok) throw new Error('PDF-ul implicit nu este disponibil. Încarcă un fișier din meniu.');
+      file=new File([await response.blob()],DEFAULT_NAME,{type:'application/pdf'});
+    }
+    if (!file) return;
+    const imported=await readSchedule(await file.arrayBuffer());
+    try {
+      useSharedSchedule(await saveSharedPdf(file,true),imported);
+      notify('Orarul existent a fost salvat pe server pentru toate dispozitivele.');
+    } catch(error) {
+      if(error.status!==412)throw error;
+      const current=await sharedDocument();
+      if(!current)throw error;
+      useSharedSchedule(current,await readSharedPdf(current));
+    }
   } catch (error) { scheduleError = error.message || 'Încarcă din nou PDF-ul din meniu.'; }
   finally { loadingSchedule = false; render(); updateImportReport(); }
 }
@@ -126,15 +161,33 @@ async function importPdf(file) {
    if(!signature.includes('%PDF-'))throw new Error('Fișierul nu are un format PDF valid.');
    $('#upload-status').textContent='Se extrage orarul anului II…';
    const imported=await readSchedule(buffer);
-   // Replace the current document only after both parsing and persistence succeed.
-   await storePdf(file);
-   if(pdfUrl?.startsWith('blob:'))URL.revokeObjectURL(pdfUrl);
-   pdfUrl=URL.createObjectURL(file);pdfName=file.name;schedule=imported;scheduleError='';
-   $('#file-name').textContent=`Fișier curent: ${pdfName}`;
-   $('#upload-status').textContent=`Import finalizat: ${schedule.events.length} activități din anul II.`;
-   updateImportReport();render();notify('Orarul anului II a fost importat.');
- }catch(error){$('#upload-status').textContent=error.name==='QuotaExceededError'?'Spațiul de stocare al browserului este insuficient.':error.message||'PDF-ul nu a putut fi salvat în acest browser.';}
+   $('#upload-status').textContent='Se salvează PDF-ul pe server…';
+   useSharedSchedule(await saveSharedPdf(file),imported);
+   $('#file-name').textContent=`Fișier pe server: ${pdfName}`;
+   $('#upload-status').textContent=`Import salvat pe server: ${schedule.events.length} activități din anul II.`;
+   updateImportReport();render();notify('Orarul este disponibil pe toate dispozitivele din LAN.');
+ }catch(error){$('#upload-status').textContent=error.message||'PDF-ul nu a putut fi salvat pe server.';}
  finally{importing=false;$('#pdf-input').value='';$('#pdf-input').disabled=false;$('#drop-zone').removeAttribute('aria-busy');}
 }
 $('#pdf-input').onchange=event=>importPdf(event.target.files[0]);const zone=$('#drop-zone');for(const type of ['dragenter','dragover'])zone.addEventListener(type,event=>{event.preventDefault();zone.classList.add('dragover');});for(const type of ['dragleave','drop'])zone.addEventListener(type,event=>{event.preventDefault();zone.classList.remove('dragover');});zone.addEventListener('drop',event=>importPdf(event.dataTransfer.files[0]));
 render();const initialization=initializeSchedule();
+
+async function synchronizeSharedSchedule() {
+  await initialization;
+  if (loadingSchedule || importing || synchronizing) return;
+  synchronizing=true;
+  const previousVersion=sharedVersion;
+  try {
+    const document=await sharedDocument();
+    if (!document || document.version===sharedVersion) return;
+    const imported=await readSharedPdf(document);
+    if (importing || previousVersion!==sharedVersion) return;
+    useSharedSchedule(document,imported);render();updateImportReport();
+    notify('Orarul a fost actualizat de pe server.');
+  } catch { /* Keep the displayed schedule during temporary network failures. */ }
+  finally { synchronizing=false; }
+}
+window.addEventListener('focus',synchronizeSharedSchedule);
+window.addEventListener('pageshow',synchronizeSharedSchedule);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)synchronizeSharedSchedule();});
+setInterval(()=>{if(!document.hidden)synchronizeSharedSchedule();},30000);

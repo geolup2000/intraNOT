@@ -9,6 +9,6 @@
   "scripts": {
     "start": "node orar/server.cjs",
     "test": "node --test orar/tests/schedule.test.mjs orar/tests/server.test.cjs",
-    "check": "node --check orar/server.cjs && node --check orar/dist/app.js && node --check orar/dist/schedule.mjs && node --check orar/dist/pdf-reader.mjs && node --check orar/dist/discipline-names.mjs"
+    "check": "node --check orar/server.cjs && node --check orar/schedule-store.cjs && node --check orar/dist/app.js && node --check orar/dist/schedule.mjs && node --check orar/dist/pdf-reader.mjs && node --check orar/dist/discipline-names.mjs"
   }
 }
