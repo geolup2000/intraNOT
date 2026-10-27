@@ -1,0 +1,22 @@
+# Private input documents are never part of the public repository.
+*.[pP][dD][fF]
+
+# Local history, hosting metadata and old deployment archives.
+.local/
+**/.openai/
+*.tar.gz
+*.zip
+
+# Dependencies, secrets and machine-specific files.
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+coverage/
+playwright-report/
+test-results/

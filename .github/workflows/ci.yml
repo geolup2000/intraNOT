@@ -1,0 +1,34 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Run parser tests
+        run: npm test
+      - name: Check Debian scripts
+        run: bash -n install.sh start.sh
+      - name: Verify installer with the configured Node.js runtime
+        run: bash install.sh
+      - name: Ensure private documents are not tracked
+        run: |
+          if git ls-files | grep -Ei '\.pdf$|(^|/)\.openai/|(^|/)\.local/|\.tar\.gz$'; then
+            echo "Private documents or local artifacts must not be committed."
+            exit 1
+          fi

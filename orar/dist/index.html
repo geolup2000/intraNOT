@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ro">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#141414"><meta name="description" content="Orarul tău universitar, simplu și la îndemână."><title>Orar · intraNOT</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23222222'/%3E%3Cpath d='M8 8h16v17H8zM8 13h16M12 5v6m8-6v6' stroke='%23f39741' stroke-width='2' fill='none'/%3E%3C/svg%3E"><link rel="stylesheet" href="style.css"></head>
+<body>
+<svg class="symbols" xmlns="http://www.w3.org/2000/svg"><defs>
+<symbol id="chevron" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+<symbol id="calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="1"/><path d="M8 2v6m8-6v6M4 10h16"/><path d="M9 14h6v4H9z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="school" viewBox="0 0 24 24"><path d="m2 7 10-5 10 5zM3 21h18M5 10v7m7-7v7m7-7v7"/></symbol>
+<symbol id="group" viewBox="0 0 24 24"><path d="M4 5h5l3-3 3 3h5v17H4zM8 9h8v9H8z"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v7l4 3"/></symbol>
+<symbol id="upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6"/></symbol>
+<symbol id="file" viewBox="0 0 24 24"><path d="M14 2H5v20h14V7zM14 2v6h5M8 13h8m-8 4h6"/></symbol>
+<symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+</defs></svg>
+<div class="app">
+<header><span class="icon-button" aria-hidden="true"></span><h1>Orar</h1><button class="icon-button more" id="menu-toggle" aria-label="Opțiuni orar" aria-expanded="false" aria-controls="menu"><span></span><span></span><span></span></button></header>
+<div class="menu" id="menu" hidden>
+<button data-action="today"><svg><use href="#calendar"/></svg><span>Ziua curentă</span></button>
+<button data-action="group"><svg><use href="#school"/></svg><span>Schimbă grupa</span><small id="group-value">4</small></button>
+<button data-action="subgroup"><svg><use href="#group"/></svg><span>Schimbă semigrupa</span><small id="subgroup-value">A</small></button>
+<button data-action="lastday"><svg><use href="#clock"/></svg><span>Schimbă ultima zi a orarului</span></button>
+<div class="menu-divider"></div>
+<button data-action="upload"><svg><use href="#upload"/></svg><span>Încarcă fișier PDF</span></button>
+<button data-action="pdf"><svg><use href="#file"/></svg><span>Vezi PDF-ul orarului</span></button>
+<button data-action="legend" hidden><svg><use href="#file"/></svg><span>Legenda disciplinelor</span></button>
+</div>
+<main>
+<nav class="date-navigation" aria-label="Navigare între săptămâni"><button class="icon-button" id="prev" aria-label="Săptămâna anterioară"><svg><use href="#chevron"/></svg></button><h2 id="date-title"></h2><button class="icon-button" id="next" aria-label="Săptămâna următoare"><svg class="rotate"><use href="#chevron"/></svg></button></nav>
+<div id="days" class="days" role="group" aria-label="Zilele săptămânii"></div>
+<button id="import-notice" class="import-notice" hidden></button>
+<section id="schedule" class="schedule" hidden aria-labelledby="schedule-heading"><div class="schedule-header"><h3 id="schedule-heading">Anul II</h3><span id="activity-count"></span></div><div id="activity-list" class="activity-list"></div></section>
+<section id="empty-state" class="empty-state" aria-labelledby="empty-title" aria-live="polite">
+<svg class="sad-face" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="43" fill="none" stroke="currentColor" stroke-width="9"/><circle cx="34" cy="39" r="7" fill="currentColor"/><circle cx="66" cy="39" r="7" fill="currentColor"/><path d="M38 71q12-9 24 0" fill="none" stroke="currentColor" stroke-width="8"/></svg>
+<h3 id="empty-title">Se citește orarul…</h3><p id="empty-description">Se extrag activitățile anului II din PDF.</p>
+<p class="pdf-link">Între timp, poți accesa orarul <button id="open-pdf">aici</button></p>
+</section>
+</main>
+<footer><span id="context-label"></span><button id="footer-upload"><svg><use href="#upload"/></svg> Încarcă PDF</button></footer>
+</div>
+<dialog id="settings"><form id="settings-form"><div class="dialog-header"><h2 id="settings-title"></h2><button type="button" class="icon-button close-dialog" aria-label="Închide"><svg><use href="#close"/></svg></button></div><div id="settings-fields"></div><button class="primary" type="submit">Salvează</button></form></dialog>
+<dialog id="upload-dialog"><div class="dialog-header"><h2>Încarcă orarul</h2><button class="icon-button close-dialog" aria-label="Închide"><svg><use href="#close"/></svg></button></div><p class="dialog-description">Se importă doar anul II. PDF-ul este procesat și păstrat local, în acest browser.</p><label class="drop-zone" id="drop-zone"><svg><use href="#upload"/></svg><strong>Alege un fișier PDF</strong><span>sau trage-l aici · maximum 20 MB</span><input type="file" id="pdf-input" accept=".pdf,application/pdf"></label><p class="file-name" id="file-name"></p><p id="import-summary" class="file-name"></p><p class="upload-status" id="upload-status" role="status"></p><details id="import-warnings" class="import-warnings" hidden><summary id="warnings-title"></summary><ul id="warnings-list"></ul></details><button class="secondary" id="view-uploaded">Deschide PDF-ul</button></dialog>
+<dialog id="pdf-dialog"><div class="dialog-header"><div><h2>PDF-ul orarului</h2><p id="preview-name"></p></div><button class="icon-button close-dialog" aria-label="Închide"><svg><use href="#close"/></svg></button></div><object id="pdf-preview" type="application/pdf"><p>Browserul nu poate afișa PDF-ul direct.</p></object><a id="download-pdf" class="secondary" download>Descarcă PDF-ul</a></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+<script type="module" src="app.js"></script>
+</body></html>
