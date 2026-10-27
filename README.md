@@ -43,19 +43,22 @@ Aplicația nu are autentificare și este destinată unei rețele de încredere. 
 
 ## Pornire automată la boot pe Debian
 
-Rulează instalarea inițială dintr-un cont obișnuit. Dacă ai pornit deja aplicația manual, oprește-o cu `Ctrl+C`, apoi instalează serviciul:
+Dacă ai pornit deja aplicația manual, oprește-o cu `Ctrl+C`, apoi instalează serviciul. Dintr-un cont obișnuit, folosește:
 
 ```sh
 sudo bash install-service.sh
 ```
 
-Dacă ești autentificat direct ca root, indică un cont obișnuit care are acces la directorul proiectului:
+Dacă ești autentificat direct ca root, poți rula aplicația și serviciul ca root, fără un cont separat:
 
 ```sh
-sudo bash install-service.sh --user NUME_UTILIZATOR
+bash install.sh
+bash install-service.sh
 ```
 
-Serviciul `intranot.service` rulează sub acel cont, este activat la boot și se repornește după erori. Nu muta directorul proiectului după instalare; dacă îl muți, rulează din nou scriptul din noua locație.
+Scriptul alege utilizatorul care a apelat `sudo`, sau utilizatorul curent când este apelat direct. Poți selecta explicit un cont cu `--user NUME_UTILIZATOR`, inclusiv `--user root`.
+
+Serviciul `intranot.service` rulează sub contul ales, este activat la boot și se repornește după erori. Nu muta directorul proiectului după instalare; dacă îl muți, rulează din nou scriptul din noua locație.
 
 ```sh
 sudo systemctl status intranot

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-service_user="${SUDO_USER:-}"
+service_user="${SUDO_USER:-$(id -un)}"
 print_only=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -19,8 +19,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$(uname -s)" != 'Linux' ]]; then printf 'Serviciul systemd este destinat Linux.\n' >&2; exit 1; fi
-if [[ -z "$service_user" || "$service_user" == 'root' || ! "$service_user" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*\$?$ ]]; then
-  printf 'Alege un cont obișnuit: sudo bash install-service.sh --user NUME_UTILIZATOR\n' >&2; exit 1
+if [[ -z "$service_user" || ! "$service_user" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*\$?$ ]]; then
+  printf 'Alege un utilizator valid: bash install-service.sh --user NUME_UTILIZATOR\n' >&2; exit 1
 fi
 if ! id "$service_user" >/dev/null 2>&1; then printf 'Utilizatorul %s nu există.\n' "$service_user" >&2; exit 1; fi
 if [[ "$project_root" == *$'\n'* || "$project_root" == *$'\r'* ]]; then printf 'Calea proiectului nu poate conține linii noi.\n' >&2; exit 1; fi

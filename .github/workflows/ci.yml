@@ -30,6 +30,11 @@ jobs:
         run: |
           bash install-service.sh --user "$(id -un)" --print-unit > "$RUNNER_TEMP/intranot.service"
           systemd-analyze verify "$RUNNER_TEMP/intranot.service"
+      - name: Validate service setup when called directly as root
+        run: |
+          sudo env -u SUDO_USER bash install-service.sh --print-unit > "$RUNNER_TEMP/intranot-root.service"
+          grep -Fx 'User=root' "$RUNNER_TEMP/intranot-root.service"
+          systemd-analyze verify "$RUNNER_TEMP/intranot-root.service"
       - name: Ensure private documents are not tracked
         run: |
           if git ls-files | grep -Ei '\.pdf$|(^|/)\.openai/|(^|/)\.local/|\.tar\.gz$'; then
