@@ -42,7 +42,7 @@ Wants=network-online.target
 Type=simple
 User=$service_user
 Group=$service_group
-WorkingDirectory="$unit_root"
+WorkingDirectory=$unit_root
 ExecStart=/usr/bin/bash "$unit_root/start.sh"
 Environment=INTRANOT_HOST=0.0.0.0
 Environment=INTRANOT_PORT=4173
@@ -63,7 +63,7 @@ if [[ ! -d /run/systemd/system ]]; then printf 'Acest sistem nu rulează cu syst
 for tool in systemctl runuser install; do
   command -v "$tool" >/dev/null 2>&1 || { printf 'Utilitar necesar lipsă: %s\n' "$tool" >&2; exit 1; }
 done
-if ! runuser -u "$service_user" -- /usr/bin/bash -c 'test -r "$1/start.sh" && cd -- "$1" && (test -x .local/node/current/bin/node || command -v node >/dev/null 2>&1)' _ "$project_root"; then
+if ! runuser -u "$service_user" -- /usr/bin/bash "$project_root/start.sh" --check; then
   printf 'Contul %s nu poate citi proiectul sau Node.js lipsește. Rulează mai întâi bash install.sh din acel cont.\n' "$service_user" >&2; exit 1
 fi
 

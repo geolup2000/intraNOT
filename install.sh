@@ -72,6 +72,8 @@ else
 fi
 
 printf 'Node.js: %s\n' "$("$node_bin" --version)"
+mkdir -p "$project_root/.local"
+printf '%s\n' "$node_bin" > "$project_root/.local/node-path"
 for source in orar/server.cjs orar/dist/app.js orar/dist/schedule.mjs orar/dist/pdf-reader.mjs orar/dist/discipline-names.mjs; do
   "$node_bin" --check "$project_root/$source"
 done
