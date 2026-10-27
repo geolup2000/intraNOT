@@ -4,9 +4,32 @@ const path = require('node:path');
 const os = require('node:os');
 const {createScheduleStore, MAX_PDF_BYTES} = require('./schedule-store.cjs');
 const root = path.resolve(__dirname, 'dist');
+function uploadOriginAllowed(req, options) {
+  if(!req.headers.origin)return true;
+  let origin;
+  try{origin=new URL(req.headers.origin);}catch{return false;}
+  if(!['http:','https:'].includes(origin.protocol))return false;
+  if(origin.host===req.headers.host)return true;
+  if(options.publicOrigin && origin.origin===new URL(options.publicOrigin).origin)return true;
+  if(options.trustProxy) {
+    const host=String(req.headers['x-forwarded-host']||'').split(',')[0].trim();
+    const proto=String(req.headers['x-forwarded-proto']||'').split(',')[0].trim();
+    try{if(['http','https'].includes(proto) && new URL(`${proto}://${host}`).origin===origin.origin)return true;}catch{}
+  }
+  return false;
+}
 function createServer(documentRoot = root, options = {}) {
 const appRoot = path.resolve(documentRoot);
 const store = createScheduleStore(options.dataDirectory || process.env.INTRANOT_DATA_DIR || path.resolve(__dirname, '../.local/data'));
+const proxyOptions={trustProxy:options.trustProxy??process.env.INTRANOT_TRUST_PROXY==='1',publicOrigin:options.publicOrigin||process.env.INTRANOT_PUBLIC_ORIGIN};
+async function currentDocument() {
+  let document=await store.metadata();
+  if(!document && fs.existsSync(path.join(appRoot,'orar-master.pdf'))) {
+    try{document=await store.save(await fs.promises.readFile(path.join(appRoot,'orar-master.pdf')),'orar-master.pdf',{onlyIfEmpty:true});}
+    catch(error){if(error.status!==412)throw error;document=await store.metadata();}
+  }
+  return document;
+}
 function json(res, status, body) {
   res.writeHead(status, {'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store'});
   res.end(JSON.stringify(body));
@@ -32,12 +55,11 @@ async function handle(req,res) {
   catch { res.writeHead(400).end(); return; }
   res.setHeader('Cache-Control', 'no-cache');
   if (name === '/api/schedule' && req.method === 'GET') {
-    json(res, 200, {document: await store.metadata()});
+    json(res, 200, {document: await currentDocument()});
     return;
   }
   if (name === '/api/schedule' && req.method === 'PUT') {
-    const origin = req.headers.origin;
-    if (origin && new URL(origin).host !== req.headers.host) { json(res,403,{error:'Încărcarea trebuie făcută din aplicația acestui server.'});req.resume();return; }
+    if (!uploadOriginAllowed(req,proxyOptions)) { json(res,403,{error:'Originea cererii nu corespunde serverului. Verifică antetul Host al proxy-ului sau INTRANOT_PUBLIC_ORIGIN.'});req.resume();return; }
     if (Number(req.headers['content-length']) > MAX_PDF_BYTES) { json(res,413,{error:'Fișierul depășește limita de 20 MB.'});req.resume();return; }
     let filename;
     try { filename = decodeURIComponent(req.headers['x-pdf-name'] || 'orar.pdf').split(/[\\/]/).pop(); }
@@ -45,7 +67,14 @@ async function handle(req,res) {
     if (!filename || filename.length > 240 || /[\x00-\x1f\x7f]/.test(filename) || !/\.pdf$/i.test(filename)) { json(res,400,{error:'Alege un fișier cu extensia .pdf.'});req.resume();return; }
     const bytes = await readUpload(req);
     if (!bytes.subarray(0,1024).includes(Buffer.from('%PDF-'))) { json(res,400,{error:'Fișierul nu are un format PDF valid.'});return; }
-    json(res,200,{document:await store.save(bytes,filename,{onlyIfEmpty:req.headers['if-none-match']==='*'})});
+    const document=await store.save(bytes,filename,{onlyIfEmpty:req.headers['if-none-match']==='*'});
+    json(res,200,{document,schedule:await store.schedule(document.version)});
+    return;
+  }
+  if (name === '/api/schedule/data' && req.method === 'GET') {
+    const schedule=await store.schedule(url.searchParams.get('version'));
+    if(!schedule){json(res,404,{error:'Nu există un orar salvat pe server.'});return;}
+    json(res,200,{schedule});
     return;
   }
   if (name === '/api/schedule/pdf' && req.method === 'GET') {
@@ -75,7 +104,7 @@ async function handle(req,res) {
 }
 return http.createServer((req,res) => {
   handle(req,res).catch(error => {
-    console.error('Eroare la procesarea cererii:', error.message);
+    if(!error.status || error.status>=500)console.error('Eroare la procesarea cererii:', error.message);
     if (res.headersSent) { res.end();return; }
     json(res,error.status || 500,{error:error.status ? error.message : 'Serverul nu poate citi sau salva orarul. Verifică spațiul și permisiunile directorului .local/data.'});
   });

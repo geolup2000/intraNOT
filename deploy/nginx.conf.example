@@ -1,0 +1,29 @@
+# Example server block. Use the upstream address appropriate for your network.
+# TLS can be configured on this Nginx server or on your existing proxy manager.
+server {
+    listen 80;
+    server_name orar.example.com;
+
+    client_max_body_size 20m;
+
+    location / {
+        proxy_pass http://127.0.0.1:4173;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+}
+
+# For a subpath, use this location instead; the trailing slash strips /orar/:
+# location /orar/ {
+#     proxy_pass http://127.0.0.1:4173/;
+#     proxy_set_header Host $http_host;
+#     proxy_set_header X-Forwarded-Host $http_host;
+#     proxy_set_header X-Forwarded-Proto $scheme;
+#     proxy_read_timeout 120s;
+# }

@@ -4,9 +4,10 @@ Aplicație web în limba română care transformă un orar universitar din PDF �
 
 ## Pornire locală
 
-Ai nevoie de Node.js 22 sau mai nou. Nu sunt necesare pachete npm suplimentare sau chei API.
+Ai nevoie de Node.js 22.13 sau mai nou. Dependențele backendului se instalează din fișierul lock; nu sunt necesare chei API.
 
 ```sh
+npm ci
 npm start
 ```
 
@@ -21,7 +22,7 @@ bash install.sh
 ./start.sh
 ```
 
-Scriptul folosește Node.js 22 sau mai nou dacă este deja disponibil. Altfel descarcă Node.js 24 din [distribuția oficială Node.js](https://nodejs.org/en/download), verifică SHA-256 și îl păstrează doar în `.local/node/`. Nu înlocuiește instalarea Node.js a sistemului. Dacă lipsesc utilitarele de descărcare, instalează `curl`, `ca-certificates`, `tar`, `xz-utils` și `coreutils` prin `apt-get`, cu `sudo` când este necesar. Descărcarea automată acceptă Debian pe x86_64 și ARM64.
+Scriptul folosește Node.js 22.13 sau mai nou dacă este deja disponibil. Altfel descarcă Node.js 24 din [distribuția oficială Node.js](https://nodejs.org/en/download), verifică SHA-256 și îl păstrează doar în `.local/node/`. Apoi instalează dependențele backendului prin `npm ci --omit=dev`. Nu înlocuiește instalarea Node.js a sistemului. Dacă lipsesc utilitarele de descărcare, instalează `curl`, `ca-certificates`, `tar`, `xz-utils` și `coreutils` prin `apt-get`, cu `sudo` când este necesar. Descărcarea automată acceptă Debian pe x86_64 și ARM64.
 
 Serverul ascultă implicit pe **0.0.0.0:4173**. De pe alt dispozitiv din aceeași rețea, accesează **http://IP-UL-SERVERULUI:4173/**. Adresele disponibile sunt afișate la pornire; pe Debian le poți verifica și cu `hostname -I`.
 
@@ -81,7 +82,41 @@ Environment=INTRANOT_PORT=5000
 
 Apoi rulează `sudo systemctl daemon-reload` și `sudo systemctl restart intranot`.
 
-În meniul cu trei puncte, alege **Încarcă fișier PDF**, apoi selectează orarul. PDF-ul este interpretat în browser și salvat pe serverul tău, în `.local/data/`. Toate dispozitivele din LAN încarcă același orar de pe server; grupa și semigrupa sunt preferințe locale ale fiecărui browser. Nu sunt folosite servicii externe de procesare sau stocare.
+În meniul cu trei puncte, alege **Încarcă fișier PDF**, apoi selectează orarul. PDF-ul este trimis către backend, unde este validat, interpretat și salvat împreună cu orarul extras în `.local/data/`. Browserul primește date JSON și nu interpretează PDF-ul. Toate dispozitivele încarcă același orar de pe server; grupa și semigrupa sunt preferințe locale ale fiecărui browser. Nu sunt folosite servicii externe de procesare sau stocare.
+
+## Reverse proxy
+
+Exemplul complet Nginx este în [deploy/nginx.conf.example](deploy/nginx.conf.example). Proxy-ul trebuie să permită corpuri de cerere de 20 MB și să păstreze antetul `Host` al cererii originale:
+
+```nginx
+client_max_body_size 20m;
+location / {
+    proxy_pass http://127.0.0.1:4173;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+}
+```
+
+Folosește adresa Debian în `proxy_pass` dacă proxy-ul rulează pe alt calculator. Configurarea HTTPS rămâne la reverse proxy. Pentru un subdirector precum `/orar/`, folosește `location /orar/` și `proxy_pass http://127.0.0.1:4173/;`, cu slash la final, pentru a elimina prefixul înainte de trimiterea la backend. Adresele API și PDF sunt relative și păstrează prefixul în browser.
+
+Dacă proxy-ul rescrie `Host`, poți indica explicit originea publică prin configurația serviciului (`systemctl edit intranot`):
+
+```ini
+[Service]
+Environment=INTRANOT_PUBLIC_ORIGIN=https://orar.example.com
+```
+
+Alternativ, pentru un proxy de încredere care suprascrie corect `X-Forwarded-Host` și `X-Forwarded-Proto`, poți activa `Environment=INTRANOT_TRUST_PROXY=1`. Implicit, aceste antete nu sunt folosite pentru a autoriza încărcări. După modificări: `systemctl daemon-reload` și `systemctl restart intranot`.
+
+Pentru actualizarea unei instalări existente:
+
+```sh
+git pull
+bash install.sh
+systemctl restart intranot
+```
 
 ## Funcționalități
 
@@ -97,7 +132,9 @@ Apoi rulează `sudo systemctl daemon-reload` și `sudo systemctl restart intrano
 
 **Repository-ul nu conține PDF-uri.** Acestea sunt excluse prin `.gitignore`. Fișierele încărcate prin aplicație sunt salvate doar pe serverul tău și nu sunt trimise către GitHub sau către servicii externe.
 
-Directorul `.local/data/` conține PDF-urile și metadatele orarului comun. Salvarea noii versiuni este atomică, iar versiunile anterioare sunt păstrate. Datele supraviețuiesc repornirii serviciului și actualizărilor prin `git pull`; nu șterge acest director. Pentru altă locație de stocare poți configura `INTRANOT_DATA_DIR`, cu drepturi de citire și scriere pentru contul serviciului.
+Directorul `.local/data/` conține PDF-urile, metadatele și fișierele JSON cu orarul extras în backend. Salvarea noii versiuni este atomică, iar versiunile anterioare sunt păstrate. Documentele invalide sau cu structură nesuportată sunt respinse de backend și nu înlocuiesc orarul curent. Datele supraviețuiesc repornirii serviciului și actualizărilor prin `git pull`; nu șterge acest director. Pentru altă locație de stocare poți configura `INTRANOT_DATA_DIR`, cu drepturi de citire și scriere pentru contul serviciului.
+
+PDF-urile deja salvate de versiunile anterioare sunt interpretate automat în backend la prima cerere pentru datele orarului; nu trebuie încărcate din nou.
 
 La actualizarea de la versiunea care salva doar în browser, deschide aplicația pe PC-ul și la aceeași adresă unde ai încărcat PDF-ul inițial. Dacă serverul nu are încă un orar, copia veche din browser este migrată automat. Dacă browserul nu mai are fișierul, încarcă-l o singură dată din nou. Pe telefon, reîncarcă pagina folosind adresa aceluiași server. Un orar deja salvat pe server are prioritate față de copiile vechi din browser.
 
@@ -127,8 +164,10 @@ GitHub Actions rulează aceleași verificări și confirmă că PDF-urile și fi
 ```text
 orar/
   dist/                 Interfață, parser și dicționar permanent
-    vendor/             PDF.js inclus local
+    vendor/             Textul licenței PDF.js
   server.cjs            Server HTTP pentru LAN, configurabil prin mediu
+  backend-pdf.mjs       Extragerea PDF exclusiv în backend
+  schedule-store.cjs    PDF-uri și date JSON persistente
   tests/                Teste pentru parser și denumiri
 ```
 

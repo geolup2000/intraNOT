@@ -1,9 +1,6 @@
 import { dateKey, eventsForDate, PROGRAMS } from './schedule.mjs';
-import { readSchedule } from './pdf-reader.mjs';
 
 const $ = (s) => document.querySelector(s);
-const DEFAULT_PDF = 'orar-master.pdf';
-const DEFAULT_NAME = '05_Master_sem1_2026-2027_V2.pdf';
 const shortDays = ['lun.', 'mar.', 'mie.', 'joi', 'vin.', 'sâm.', 'dum.'];
 const fullDays = ['Luni', 'Marți', 'Miercuri', 'Joi', 'Vineri', 'Sâmbătă', 'Duminică'];
 let preferences;
@@ -100,51 +97,47 @@ $('#open-pdf').onclick=openPdf; $('#footer-upload').onclick=openUpload;$('#impor
 function database() { return new Promise((resolve,reject)=>{const request=indexedDB.open('intranot',1);request.onupgradeneeded=()=>request.result.createObjectStore('documents');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);}); }
 async function restoreLegacyPdf() { try{const db=await database();const file=await new Promise((resolve,reject)=>{const req=db.transaction('documents').objectStore('documents').get('schedule');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});db.close();return file||null;}catch{return null;} }
 async function sharedDocument() {
-  const response = await fetch('/api/schedule', {cache:'no-store'});
+  const response = await fetch('api/schedule', {cache:'no-store'});
   if (!response.ok) throw new Error('Actualizează și repornește serverul pentru salvarea comună a orarului.');
   return (await response.json()).document;
 }
 async function saveSharedPdf(file, onlyIfEmpty=false) {
   const headers={'Content-Type':'application/pdf','X-PDF-Name':encodeURIComponent(file.name)};
   if(onlyIfEmpty)headers['If-None-Match']='*';
-  const response = await fetch('/api/schedule', {method:'PUT',headers,body:file});
+  const response = await fetch('api/schedule', {method:'PUT',headers,body:file});
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.document) throw Object.assign(new Error(result.error || 'PDF-ul nu a putut fi salvat pe server.'),{status:response.status});
-  return result.document;
+  return result;
 }
-async function readSharedPdf(document) {
-  const response = await fetch(document.pdfUrl, {cache:'no-store'});
-  if (!response.ok) throw new Error('PDF-ul salvat pe server nu poate fi citit.');
-  return readSchedule(await response.arrayBuffer());
+async function readSharedSchedule(document) {
+  const response = await fetch(document.dataUrl, {cache:'no-store'});
+  const result=await response.json().catch(()=>({}));
+  if (!response.ok || !result.schedule) throw new Error(result.error||'Orarul nu poate fi citit din backend.');
+  return result.schedule;
 }
 function useSharedSchedule(document, imported) {
   pdfUrl=document.pdfUrl;pdfName=document.name;sharedVersion=document.version;schedule=imported;scheduleError='';
 }
 async function initializeSchedule() {
   try {
-    const [configResponse, document] = await Promise.all([fetch('/api/local-documents'), sharedDocument()]);
+    const [configResponse, document] = await Promise.all([fetch('api/local-documents'), sharedDocument()]);
     if (!configResponse.ok) throw new Error('Pornește aplicația cu npm start sau start-local.cmd.');
     const documents = await configResponse.json();
     $('[data-action="legend"]').hidden = !documents.legend;
-    if (document) { useSharedSchedule(document, await readSharedPdf(document));return; }
+    if (document) { useSharedSchedule(document, await readSharedSchedule(document));return; }
     // Migrate the old browser-only document once, without overwriting a shared
     // schedule with a potentially stale browser cache on subsequent visits.
-    let file = await restoreLegacyPdf();
-    if (!file && documents.schedule) {
-      const response=await fetch(DEFAULT_PDF);
-      if (!response.ok) throw new Error('PDF-ul implicit nu este disponibil. Încarcă un fișier din meniu.');
-      file=new File([await response.blob()],DEFAULT_NAME,{type:'application/pdf'});
-    }
+    const file = await restoreLegacyPdf();
     if (!file) return;
-    const imported=await readSchedule(await file.arrayBuffer());
     try {
-      useSharedSchedule(await saveSharedPdf(file,true),imported);
+      const result=await saveSharedPdf(file,true);
+      useSharedSchedule(result.document,result.schedule);
       notify('Orarul existent a fost salvat pe server pentru toate dispozitivele.');
     } catch(error) {
       if(error.status!==412)throw error;
       const current=await sharedDocument();
       if(!current)throw error;
-      useSharedSchedule(current,await readSharedPdf(current));
+      useSharedSchedule(current,await readSharedSchedule(current));
     }
   } catch (error) { scheduleError = error.message || 'Încarcă din nou PDF-ul din meniu.'; }
   finally { loadingSchedule = false; render(); updateImportReport(); }
@@ -156,13 +149,9 @@ async function importPdf(file) {
    await initialization;
    if(!/\.pdf$/i.test(file.name))throw new Error('Alege un fișier cu extensia .pdf.');
    if(file.size>20*1024*1024)throw new Error('Fișierul depășește limita de 20 MB.');
-   const buffer=await file.arrayBuffer();
-   const signature=new TextDecoder().decode(buffer.slice(0,1024));
-   if(!signature.includes('%PDF-'))throw new Error('Fișierul nu are un format PDF valid.');
-   $('#upload-status').textContent='Se extrage orarul anului II…';
-   const imported=await readSchedule(buffer);
-   $('#upload-status').textContent='Se salvează PDF-ul pe server…';
-   useSharedSchedule(await saveSharedPdf(file),imported);
+   $('#upload-status').textContent='Se încarcă și se procesează PDF-ul în backend…';
+   const result=await saveSharedPdf(file);
+   useSharedSchedule(result.document,result.schedule);
    $('#file-name').textContent=`Fișier pe server: ${pdfName}`;
    $('#upload-status').textContent=`Import salvat pe server: ${schedule.events.length} activități din anul II.`;
    updateImportReport();render();notify('Orarul este disponibil pe toate dispozitivele din LAN.');
@@ -180,7 +169,7 @@ async function synchronizeSharedSchedule() {
   try {
     const document=await sharedDocument();
     if (!document || document.version===sharedVersion) return;
-    const imported=await readSharedPdf(document);
+    const imported=await readSharedSchedule(document);
     if (importing || previousVersion!==sharedVersion) return;
     useSharedSchedule(document,imported);render();updateImportReport();
     notify('Orarul a fost actualizat de pe server.');

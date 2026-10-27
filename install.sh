@@ -5,7 +5,7 @@ project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   printf '%s\n' 'Utilizare: bash install.sh' \
-    'Pregătește intraNOT pe Debian. Folosește Node.js >=22 dacă există deja.' \
+    'Pregătește intraNOT pe Debian. Folosește Node.js >=22.13 dacă există deja.' \
     'Altfel descarcă Node.js 24 din nodejs.org în .local/node/, cu verificare SHA-256.' \
     'Nu instalează aplicația ca serviciu și nu modifică firewall-ul.'
   exit 0
@@ -17,7 +17,7 @@ if [[ "$(uname -s)" != 'Linux' || ! -f /etc/debian_version ]]; then
 fi
 
 usable_node() {
-  [[ -x "$1" ]] && "$1" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)' >/dev/null 2>&1
+  [[ -x "$1" ]] && "$1" -e 'const [major,minor]=process.versions.node.split(".").map(Number);process.exit(major>22 || (major===22 && minor>=13) ? 0 : 1)' >/dev/null 2>&1
 }
 
 node_bin=''
@@ -29,7 +29,7 @@ else
   case "$(uname -m)" in
     x86_64|amd64) node_arch='x64' ;;
     aarch64|arm64) node_arch='arm64' ;;
-    *) printf 'Arhitectură nesuportată automat. Instalează Node.js >=22 și rulează din nou.\n' >&2; exit 1 ;;
+    *) printf 'Arhitectură nesuportată automat. Instalează Node.js >=22.13 și rulează din nou.\n' >&2; exit 1 ;;
   esac
 
   missing=0
@@ -74,7 +74,10 @@ fi
 printf 'Node.js: %s\n' "$("$node_bin" --version)"
 mkdir -p "$project_root/.local"
 printf '%s\n' "$node_bin" > "$project_root/.local/node-path"
-for source in orar/server.cjs orar/schedule-store.cjs orar/dist/app.js orar/dist/schedule.mjs orar/dist/pdf-reader.mjs orar/dist/discipline-names.mjs; do
+export PATH="$(dirname -- "$node_bin"):$PATH"
+cd -- "$project_root"
+npm ci --omit=dev
+for source in orar/server.cjs orar/schedule-store.cjs orar/backend-pdf.mjs orar/dist/app.js orar/dist/schedule.mjs orar/dist/discipline-names.mjs; do
   "$node_bin" --check "$project_root/$source"
 done
 "$node_bin" --test "$project_root/orar/tests/schedule.test.mjs" "$project_root/orar/tests/server.test.cjs"

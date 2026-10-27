@@ -12,8 +12,8 @@ if [[ ! -x "$node_bin" ]]; then
 fi
 if [[ "${1:-}" == '--check' ]]; then exec "$node_bin" --version; fi
 if [[ $# -gt 0 ]]; then printf 'Argument necunoscut.\n' >&2; exit 1; fi
-if [[ -z "$node_bin" ]] || ! "$node_bin" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)' >/dev/null 2>&1; then
-  printf 'Node.js >=22 lipsește. Rulează mai întâi: bash install.sh\n' >&2
+if [[ -z "$node_bin" ]] || ! "$node_bin" -e 'const [major,minor]=process.versions.node.split(".").map(Number);process.exit(major>22 || (major===22 && minor>=13) ? 0 : 1)' >/dev/null 2>&1; then
+  printf 'Node.js >=22.13 lipsește. Rulează mai întâi: bash install.sh\n' >&2
   exit 1
 fi
 cd -- "$project_root"

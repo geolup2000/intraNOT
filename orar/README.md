@@ -1,10 +1,10 @@
 # intraNOT – Orar
 
-Aplicație statică în limba română, inspirată de capturile furnizate. Deservește directorul `dist` prin HTTP.
+Aplicație în limba română, cu interfață în `dist` și backend Node.js pentru importul PDF.
 
 Include navigarea între săptămâni și zile, revenirea la data curentă din București, setări pentru grupă, semigrupă și ultima zi vizibilă, încărcare PDF prin selecție sau drag-and-drop, salvare comună pe server și vizualizare/descărcare PDF. Preferințele se păstrează în localStorage; vechile documente IndexedDB sunt migrate dacă serverul nu are încă un orar.
 
-PDF-urile nu sunt incluse în repository. La prima pornire, încarcă orarul din meniu. PDF-ul comun și versiunile sale se păstrează în `.local/data/` din rădăcina proiectului, ignorat de Git. Un fișier implicit poate fi păstrat opțional local în `dist/orar-master.pdf` și este migrat la prima deschidere. Importul folosește PDF.js inclus local, fără CDN sau serviciu extern de procesare. Datele și pozițiile textului din PDF identifică săptămânile, coloanele zilelor și exclusiv rândurile anului II. Orarul este recalculat din PDF la deschidere și după fiecare încărcare. Un PDF respins de importator nu înlocuiește documentul curent.
+PDF-urile nu sunt incluse în repository. La prima pornire, încarcă orarul din meniu. Backendul folosește PDF.js pentru extragere și salvează PDF-ul, versiunile și orarul JSON în `.local/data/` din rădăcina proiectului, ignorat de Git. Browserul primește orarul deja extras. Un fișier implicit poate fi păstrat opțional local în `dist/orar-master.pdf` și este migrat de backend. Documentele respinse nu înlocuiesc orarul curent. Instalarea dependențelor, configurarea proxy-ului și pașii pentru Debian sunt descriși în README-ul principal.
 
 Reguli confirmate: intervalul orar de la început, `c`/`C` = curs, `s`/`S` = seminar, `gr 1`–`gr 4` (inclusiv liste) = grupe. Numerele fără marcaj `gr` nu sunt interpretate drept grupe. Activitățile fără grupă explicită rămân vizibile pentru orice grupă; sunt etichetate „Fără grupă indicată”. Sunt incluse toate activitățile anului II, fără un filtru de specializare neconfirmat. Semigrupa este salvată ca preferință, dar nu filtrează activitățile până la definirea regulilor sale.
 
