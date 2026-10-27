@@ -23,9 +23,13 @@ jobs:
       - name: Run parser tests
         run: npm test
       - name: Check Debian scripts
-        run: bash -n install.sh start.sh
+        run: bash -n install.sh start.sh install-service.sh
       - name: Verify installer with the configured Node.js runtime
         run: bash install.sh
+      - name: Validate generated systemd unit
+        run: |
+          bash install-service.sh --user "$(id -un)" --print-unit > "$RUNNER_TEMP/intranot.service"
+          systemd-analyze verify "$RUNNER_TEMP/intranot.service"
       - name: Ensure private documents are not tracked
         run: |
           if git ls-files | grep -Ei '\.pdf$|(^|/)\.openai/|(^|/)\.local/|\.tar\.gz$'; then

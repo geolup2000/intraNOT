@@ -37,9 +37,46 @@ Pentru a limita accesul din nou la același calculator:
 INTRANOT_HOST=127.0.0.1 ./start.sh
 ```
 
-Dacă serverul are firewall activ, permite portul ales pentru dispozitivele din LAN. Scriptul nu modifică firewall-ul, nu configurează routerul și nu instalează un serviciu de fundal. Aplicația rulează în terminal până la `Ctrl+C`.
+Dacă serverul are firewall activ, permite portul ales pentru dispozitivele din LAN. Scriptul nu modifică firewall-ul și nu configurează routerul. Cu `./start.sh`, aplicația rulează în terminal până la `Ctrl+C`.
 
 Aplicația nu are autentificare și este destinată unei rețele de încredere. Dispozitivele din LAN pot deschide aplicația; fișierele salvate în browser rămân proprii acelui browser. PDF-urile opționale așezate direct în `orar/dist/` sunt accesibile dispozitivelor care pot accesa serverul.
+
+## Pornire automată la boot pe Debian
+
+Rulează instalarea inițială dintr-un cont obișnuit. Dacă ai pornit deja aplicația manual, oprește-o cu `Ctrl+C`, apoi instalează serviciul:
+
+```sh
+sudo bash install-service.sh
+```
+
+Dacă ești autentificat direct ca root, indică un cont obișnuit care are acces la directorul proiectului:
+
+```sh
+sudo bash install-service.sh --user NUME_UTILIZATOR
+```
+
+Serviciul `intranot.service` rulează sub acel cont, este activat la boot și se repornește după erori. Nu muta directorul proiectului după instalare; dacă îl muți, rulează din nou scriptul din noua locație.
+
+```sh
+sudo systemctl status intranot
+sudo journalctl -u intranot -n 50 --no-pager
+sudo systemctl restart intranot
+```
+
+Pentru a dezactiva pornirea automată și a opri aplicația:
+
+```sh
+sudo systemctl disable --now intranot
+```
+
+Pentru alt port, rulează `sudo systemctl edit intranot` și adaugă:
+
+```ini
+[Service]
+Environment=INTRANOT_PORT=5000
+```
+
+Apoi rulează `sudo systemctl daemon-reload` și `sudo systemctl restart intranot`.
 
 În meniul cu trei puncte, alege **Încarcă fișier PDF**, apoi selectează orarul. Aplicația păstrează documentul în IndexedDB, iar preferințele în localStorage, în browserul folosit. PDF-urile sunt procesate local, fără servicii externe.
 
